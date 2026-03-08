@@ -149,25 +149,28 @@ def paths():
         d.mkdir(parents=True, exist_ok=True)
     return base, biz, lg
 
-# ── COLORS ────────────────────────────────────────────────────────────────────
-BG      = "#0f1117"
-SURFACE = "#1a1d26"
-CARD    = "#20242f"
-BORDER  = "#2a2e3d"
-ACCENT  = "#3b82f6"
-GREEN   = "#10b981"
-YELLOW  = "#f59e0b"
+# ── COLORS — Night Mode Neutral ───────────────────────────────────────────────
+BG      = "#0d0f14"
+SURFACE = "#13151c"
+CARD    = "#181b23"
+BORDER  = "#252830"
+ACCENT  = "#66FFCC"
+GREEN   = "#22c55e"
+YELLOW  = "#eab308"
 RED     = "#ef4444"
-TEXT    = "#e2e8f0"
-MUTED   = "#64748b"
-WHITE   = "#ffffff"
+TEXT    = "#e8eaf0"
+MUTED   = "#4b5468"
+WHITE   = "#f1f5f9"
 H_BG    = "1a3a5c"
 ROW_ALT = "f0f4f8"
+INPUT_BG    = "#1e2130"
+INPUT_FG    = "#f1f5f9"
+INPUT_FOCUS = "#66FFCC"
 
-FONT   = ("Segoe UI", 10)
-FONT_B = ("Segoe UI", 10, "bold")
-FONT_S = ("Segoe UI", 9)
-FONT_H = ("Segoe UI", 13, "bold")
+FONT   = ("Segoe UI", 13)
+FONT_B = ("Segoe UI", 13, "bold")
+FONT_S = ("Segoe UI", 11)
+FONT_H = ("Segoe UI", 14, "bold")
 
 # ── LOGGING ───────────────────────────────────────────────────────────────────
 def log(msg):
@@ -394,9 +397,7 @@ def get_stats():
 # ── COLUMN PREVIEW WINDOW ────────────────────────────────────────────────────
 def show_column_preview(folder_path):
     """
-    Hap dritare qe shfaq kolonat e file-ave ekzistuese.
-    Pyet nëse duhet shtuar kolona Data/Ora e shtimit.
-    NUK ndryshon asgjë pa leje të përdoruesit.
+    Shfaq shkurtimisht file-at e lexuara — pa pyetje per timestamp.
     """
     p = Path(folder_path)
     # Prioritet: skanon direkt folder-in e zgjedhur, kapërcen SYS_FOLDER
@@ -450,43 +451,10 @@ def show_column_preview(folder_path):
         tk.Label(row, text="✔ lexuar", font=("Segoe UI", 8),
                  bg=SURFACE, fg=GREEN).pack(side="right")
 
-    # ── Pyetja për Data/Ora ──────────────────────────────────────────────────
-    sep = tk.Frame(win, bg=BORDER, height=1)
-    sep.pack(fill="x", padx=16, pady=(8,0))
-
-    qa_frame = tk.Frame(win, bg="#0d2137", padx=16, pady=12,
-                        highlightbackground="#1d4ed8", highlightthickness=1)
-    qa_frame.pack(fill="x", padx=16, pady=(0,4))
-
-    tk.Label(qa_frame,
-             text='Dëshiron të shtohet kolona  "Data/Ora e shtimit"  në formularet e klientëve?',
-             font=("Segoe UI", 9, "bold"), bg="#0d2137", fg="#93c5fd", wraplength=740,
-             justify="left").pack(anchor="w")
-    tk.Label(qa_frame,
-             text="(Kjo tregon kur është shtuar çdo hyrje nga programi — formularët nuk ndryshohen ndryshe.)",
-             font=("Segoe UI", 8), bg="#0d2137", fg="#64748b").pack(anchor="w", pady=(2,0))
-
-    add_timestamp = tk.BooleanVar(value=False)
-
-    btn_row = tk.Frame(win, bg=BG)
-    btn_row.pack(fill="x", padx=16, pady=(4,10))
-
-    def _vazhdo(me_timestamp: bool):
-        add_timestamp.set(me_timestamp)
-        # Ruaj zgjedhjen në config
-        cfg = load_config()
-        cfg["add_timestamp"] = me_timestamp
-        save_config(cfg)
-        win.destroy()
-
-    tk.Button(btn_row, text="✔  Po, shto Data/Ora",
-              font=FONT_S, bg=GREEN, fg=WHITE, relief="flat", pady=9,
-              cursor="hand2",
-              command=lambda: _vazhdo(True)).pack(side="left", fill="x", expand=True, padx=(0,6))
-    tk.Button(btn_row, text="✖  Jo, vetëm lexo",
-              font=FONT_S, bg=SURFACE, fg=TEXT, relief="flat", pady=9,
-              cursor="hand2",
-              command=lambda: _vazhdo(False)).pack(side="right", fill="x", expand=True)
+    # Buton i thjeshtë Vazhdo
+    tk.Button(win, text="  VAZHDO  ▶", font=FONT_B,
+              bg=ACCENT, fg="#0d0f14", relief="flat", pady=12,
+              cursor="hand2", command=win.destroy).pack(fill="x", padx=16, pady=(8,12))
 
     win.mainloop()
 
@@ -664,7 +632,7 @@ class App(tk.Tk):
             _img = _Img.open(_io.BytesIO(_png_bytes)).convert("RGBA")
             # Resize proporcionalisht — lartësia 38px (2 rreshta teksti)
             _ow, _oh = _img.size
-            _nh = 38
+            _nh = 15
             _nw = int(_ow * _nh / _oh)
             _img = _img.resize((_nw, _nh), _Img.LANCZOS)
             self._logo_img = _ITk.PhotoImage(_img)
@@ -696,14 +664,11 @@ class App(tk.Tk):
                   relief="flat", cursor="hand2", bd=0,
                   command=self.open_settings).pack(side="right", padx=(0, 12))
 
-        # Stats — BIZNESE + DERGESA gjithmonë; financiare vetëm nëse ka
+        # Stats — vetëm BIZNESE + DERGESA
         sf = tk.Frame(self, bg=CARD)
         sf.pack(fill="x")
         self.s_biz = self._stat(sf, "BIZNESE", "0", ACCENT)
         self.s_der = self._stat(sf, "DERGESA", "0", GREEN)
-        # Frame për kolonat financiare (shfaqet dinamikisht)
-        self.sf_fin = sf
-        self._fin_stat_frames = {}   # { col_name: label_widget }
 
         # Tabs
         style = ttk.Style()
@@ -1012,12 +977,12 @@ class App(tk.Tk):
         pass
 
     def _regenerate_fields(self, biz_name, columns):
-        """Fshij fushat e vjetra dhe gjenero te reja bazuar ne kolonat e xlsx."""
-        # Pastro zonen
+        """Gjenero fushat — 1 kolonë, X menjëherë, buton reload."""
         for w in self._fields_area.winfo_children():
             w.destroy()
         self.ents = {}
         self._current_cols = columns
+        self._current_biz_name = biz_name
 
         if not columns:
             tk.Label(self._fields_area,
@@ -1027,99 +992,145 @@ class App(tk.Tk):
             return
 
         self._lbl_cols.config(
-            text=f"{len(columns)} kolona u lexuan nga  {biz_name.replace(' ','_')}.xlsx",
-            fg=GREEN)
+            text=f"{len(columns)} kolona  ·  {biz_name.replace(' ','_')}.xlsx",
+            fg=ACCENT)
 
-        form = tk.Frame(self._fields_area, bg=CARD, padx=24, pady=14,
-                        highlightbackground=BORDER, highlightthickness=1)
-        form.pack(fill="x")
-
-        today = datetime.now().strftime("%d/%m/%Y")
-
-        # Fusha te fshehura per kete biznes ne kete sesion
+        # Fusha te fshehura per kete biznes (session)
         hidden_key = f"_hidden_{biz_name}"
         if not hasattr(self, hidden_key):
             setattr(self, hidden_key, set())
-        hidden_set = getattr(self, hidden_key)
 
-        # Grid 4-kolonësh — çdo fushë zë 1/4 të gjerësisë
-        grid_frame = tk.Frame(form, bg=CARD)
-        grid_frame.pack(fill="x")
-        # 4 kolona me peshë të barabartë
-        for c in range(4):
-            grid_frame.columnconfigure(c, weight=1, uniform="col")
+        self._draw_fields(biz_name, columns)
 
-        visible_idx = 0  # pozicioni ne grid
+    def _draw_fields(self, biz_name, columns):
+        """Vizato fushat — thirret nga _regenerate dhe nga reload."""
+        # Pastro vetem fushat (jo header)
+        for w in self._fields_area.winfo_children():
+            w.destroy()
+        self.ents = {}
+
+        hidden_key  = f"_hidden_{biz_name}"
+        hidden_set  = getattr(self, hidden_key, set())
+        today       = datetime.now().strftime("%d/%m/%Y")
+
+        # ── Wrapper kryesor ──────────────────────────────────────────────────
+        form = tk.Frame(self._fields_area, bg=CARD,
+                        highlightbackground=BORDER, highlightthickness=1)
+        form.pack(fill="x", padx=2, pady=2)
+
+        # ── Toolbar: "Reload fushat" ─────────────────────────────────────────
+        toolbar = tk.Frame(form, bg=CARD, padx=16, pady=8)
+        toolbar.pack(fill="x")
+
+        hidden_count = len([i for i in range(len(columns)) if i in hidden_set])
+        if hidden_count > 0:
+            reload_text = f"↺  Rivendos të gjitha  ({hidden_count} të fshehura)"
+        else:
+            reload_text = "↺  Rivendos fushat"
+
+        self._reload_btn = tk.Button(
+            toolbar, text=reload_text,
+            font=("Segoe UI", 10), bg=CARD, fg=MUTED,
+            relief="flat", cursor="hand2",
+            activebackground=CARD, activeforeground=WHITE,
+            command=lambda: self._reload_fields(biz_name, columns))
+        self._reload_btn.pack(side="right")
+
+        # ── Fushat — 1 kolonë ────────────────────────────────────────────────
+        fields_wrap = tk.Frame(form, bg=CARD, padx=16, pady=4)
+        fields_wrap.pack(fill="x")
 
         for idx, col_title in enumerate(columns):
             if idx in hidden_set:
-                continue  # kapërce fushat e fshehura
+                continue
 
-            col_pos = visible_idx % 4
-            row_pos = visible_idx // 4
+            row = tk.Frame(fields_wrap, bg=CARD, pady=6)
+            row.pack(fill="x")
 
-            cell = tk.Frame(grid_frame, bg=CARD, padx=6, pady=4)
-            cell.grid(row=row_pos, column=col_pos, sticky="ew", padx=(0, 4), pady=2)
+            # Label + X në të njëjtin rresht
+            lbl_row = tk.Frame(row, bg=CARD)
+            lbl_row.pack(fill="x")
 
-            # Header i fushës: label + X button
-            hdr_row = tk.Frame(cell, bg=CARD)
-            hdr_row.pack(fill="x")
+            tk.Label(lbl_row, text=col_title,
+                     font=("Segoe UI", 10), bg=CARD, fg=MUTED,
+                     anchor="w").pack(side="left")
 
-            tk.Label(hdr_row, text=col_title, font=FONT_S, bg=CARD,
-                     fg=MUTED, anchor="w").pack(side="left")
-
-            # X button — opacity 50% me ngjyrë të zezë fare
-            def make_hide(i=idx, c=cell, bname=biz_name):
+            def make_hide(i=idx, r=row, bname=biz_name, cols=columns):
                 def hide():
                     getattr(self, f"_hidden_{bname}").add(i)
-                    c.destroy()
-                    # Largo nga ents
                     if i in self.ents:
                         del self.ents[i]
-                    # Refresh enter navigation
+                    r.destroy()
                     self._rebind_entries()
+                    # Update reload button count
+                    hc = len(getattr(self, f"_hidden_{bname}", set()))
+                    if hasattr(self, '_reload_btn') and self._reload_btn.winfo_exists():
+                        self._reload_btn.config(
+                            text=f"↺  Rivendos të gjitha  ({hc} të fshehura)",
+                            fg=ACCENT)
                 return hide
 
-            x_btn = tk.Button(hdr_row, text="✕", font=("Segoe UI", 7),
-                              bg=CARD, fg="#4a7a6a",  # green palette 50% opacity feel
-                              relief="flat", cursor="hand2",
+            x_btn = tk.Button(lbl_row, text="✕",
+                              font=("Segoe UI", 9), bg=CARD,
+                              fg="#2a4a3e", relief="flat", cursor="hand2",
                               activebackground=CARD, activeforeground=RED,
+                              bd=0, padx=4,
                               command=make_hide())
             x_btn.pack(side="right")
 
-            e = tk.Entry(cell, font=FONT, bg=SURFACE, fg=TEXT,
-                         insertbackground=WHITE, relief="flat",
-                         highlightbackground=BORDER, highlightthickness=1)
-            e.pack(fill="x", ipady=6)
+            # Entry — i madh, i qartë
+            e = tk.Entry(row,
+                         font=("Segoe UI", 13),
+                         bg=INPUT_BG, fg=INPUT_FG,
+                         insertbackground=ACCENT,
+                         relief="flat",
+                         highlightbackground=BORDER,
+                         highlightthickness=2)
+            e.pack(fill="x", ipady=10)
 
-            # Auto-fill data
+            # Focus: border bëhet teal
+            e.bind("<FocusIn>",  lambda ev, w=e: w.config(highlightbackground=ACCENT))
+            e.bind("<FocusOut>", lambda ev, w=e: w.config(highlightbackground=BORDER))
+
             col_lower = col_title.lower()
             if any(x in col_lower for x in ["data", "date", "dt", "dita"]):
                 e.insert(0, today)
 
             self.ents[idx] = {"entry": e, "col_title": col_title}
-            visible_idx += 1
 
         self._rebind_entries()
 
-        # Butonat
-        btn_row = tk.Frame(form, bg=CARD)
-        btn_row.pack(fill="x", pady=(14, 2))
+        # ── Separator ────────────────────────────────────────────────────────
+        tk.Frame(form, bg=BORDER, height=1).pack(fill="x", padx=16, pady=(8, 0))
 
-        self._btn_save = tk.Button(btn_row, text="  RUAJ DERGESEN  ",
-                  font=FONT_B, bg=GREEN, fg=WHITE, relief="flat",
-                  pady=11, cursor="hand2",
-                  command=self.save)
+        # ── Butonat ──────────────────────────────────────────────────────────
+        btn_row = tk.Frame(form, bg=CARD, padx=16, pady=12)
+        btn_row.pack(fill="x")
+
+        self._btn_save = tk.Button(
+            btn_row, text="  RUAJ DËRGESEN  ",
+            font=("Segoe UI", 13, "bold"),
+            bg=ACCENT, fg="#0d0f14",
+            relief="flat", pady=13,
+            cursor="hand2", command=self.save)
         self._btn_save.pack(side="left", fill="x", expand=True, padx=(0, 8))
         self._btn_save.bind("<Return>", lambda e: self.save())
 
         tk.Button(btn_row, text="Pastro",
-                  font=FONT_S, bg=SURFACE, fg=MUTED, relief="flat",
-                  pady=11, cursor="hand2",
-                  command=self.clear_form).pack(side="right", ipadx=14)
+                  font=FONT_S, bg=SURFACE, fg=MUTED,
+                  relief="flat", pady=13, cursor="hand2",
+                  command=self.clear_form).pack(side="right", ipadx=16)
 
-        # Scroll ne krye
         self._canvas.yview_moveto(0)
+
+    def _reload_fields(self, biz_name, columns):
+        """Rivendos të gjitha fushat — fshin hidden_set."""
+        hidden_key = f"_hidden_{biz_name}"
+        setattr(self, hidden_key, set())
+        self._draw_fields(biz_name, columns)
+        # Fokus te fusha e parë
+        if self.ents:
+            list(self.ents.values())[0]["entry"].focus_set()
 
     def _rebind_entries(self):
         """Rilidh Enter navigation pas fshehjes se fushave."""
@@ -1474,7 +1485,6 @@ class App(tk.Tk):
                 self.refresh_biz()
                 log(f"Folder u ndryshua ne: {p}")
                 win.destroy()
-                show_column_preview(p)
             except Exception as ex:
                 messagebox.showerror("Gabim", str(ex))
 
@@ -1483,10 +1493,7 @@ class App(tk.Tk):
         tk.Button(btn_row2, text="RUAJ", font=FONT_B,
                   bg=GREEN, fg=WHITE, relief="flat", pady=10,
                   cursor="hand2", command=apply).pack(side="left", fill="x", expand=True, padx=(0,6))
-        tk.Button(btn_row2, text="Shiko Kolonat",
-                  font=FONT_S, bg=SURFACE, fg=ACCENT, relief="flat", pady=10,
-                  cursor="hand2",
-                  command=lambda: show_column_preview(path_var.get())).pack(side="right", ipadx=10)
+
 
         # ── Butoni Reset Setup ───────────────────────────────────────────
         sep = tk.Frame(win, bg=BORDER, height=1)
@@ -1560,23 +1567,6 @@ class App(tk.Tk):
             s = get_stats()
             self.s_biz.config(text=str(s["biznese"]))
             self.s_der.config(text=str(s["dergesa"]))
-
-            fin = s.get("fin_cols", {})
-            # Largo kolonat që nuk janë më
-            for col in list(self._fin_stat_frames.keys()):
-                if col not in fin:
-                    self._fin_stat_frames[col].destroy()
-                    del self._fin_stat_frames[col]
-            # Shto / update kolonat e reja
-            colors = [YELLOW, "#f97316", "#a78bfa", "#fb7185", "#38bdf8"]
-            for i, (col, val) in enumerate(fin.items()):
-                color = colors[i % len(colors)]
-                formatted = f"{val:,.0f}"
-                if col in self._fin_stat_frames:
-                    self._fin_stat_frames[col].config(text=formatted)
-                else:
-                    lbl = self._stat(self.sf_fin, col.upper()[:12], formatted, color)
-                    self._fin_stat_frames[col] = lbl
         except:
             pass
 
