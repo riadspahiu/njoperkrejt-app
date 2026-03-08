@@ -19,85 +19,100 @@ APP_DIR     = Path(os.path.expanduser("~")) / "NjoPerKrejt"
 APP_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = APP_DIR / "config.json"
 
-VERSION = "1.0"
-GITHUB_USER = "riadspahiu"
-GITHUB_REPO = "njoperkrejt-app"
+VERSION       = "1.0"
+GITHUB_USER   = "riadspahiu"
+GITHUB_REPO   = "njoperkrejt-app"
 GITHUB_BRANCH = "main"
-GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}"
+GITHUB_RAW    = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}"
+_EXTERNAL_APP = APP_DIR / "app_update.py"
+_VER_FILE     = APP_DIR / "installed_version.txt"
+
+
+def _boot_external():
+    """Nese ka app_update.py te shkarkuar, ekzekutoje ate."""
+    if _EXTERNAL_APP.exists():
+        try:
+            import subprocess
+            subprocess.Popen([sys.executable, str(_EXTERNAL_APP)] + sys.argv[1:])
+            sys.exit(0)
+        except Exception:
+            pass
+
+
+def _get_current_version():
+    """Kthe versionin aktual."""
+    if _VER_FILE.exists():
+        try:
+            return _VER_FILE.read_text().strip()
+        except Exception:
+            pass
+    return VERSION
 
 
 def check_for_update():
-    """Kontrollo GitHub per version te ri. Ekzekutohet ne background thread."""
+    """Kontrollo GitHub per version te ri. Background thread."""
     import threading
+    current = _get_current_version()
 
     def _check():
         try:
-            import urllib.request, urllib.error
-            url = f"{GITHUB_RAW}/version.txt"
-            with urllib.request.urlopen(url, timeout=5) as r:
+            import urllib.request
+            with urllib.request.urlopen(f"{GITHUB_RAW}/version.txt", timeout=5) as r:
                 latest = r.read().decode().strip()
-            if latest and latest != VERSION:
-                _prompt_update(latest)
+            if latest and latest != current:
+                _prompt_update(latest, current)
         except Exception:
-            pass  # nuk ka internet ose repo — vazhdo normalisht
+            pass
 
     threading.Thread(target=_check, daemon=True).start()
 
 
-def _prompt_update(latest_version):
+def _prompt_update(latest_version, current_version):
     """Shfaq dritaren e update-it ne thread kryesor."""
-    import urllib.request
-
     def _show():
         win = tk.Toplevel()
         win.title("Update i disponueshem")
         win.geometry("380x180")
-        win.configure(bg="#0f1117")
+        win.configure(bg="#0d0f14")
         win.resizable(False, False)
         win.grab_set()
         win.lift()
         win.focus_force()
 
-        tk.Label(win, text="🔄  Update i ri i disponueshem!",
-                 font=("Segoe UI", 11, "bold"), bg="#0f1117", fg="#66FFCC").pack(pady=(22, 4))
-        tk.Label(win, text=f"Versioni aktual: {VERSION}   →   Versioni i ri: {latest_version}",
-                 font=("Segoe UI", 9), bg="#0f1117", fg="#888").pack()
+        tk.Label(win, text="Update i ri i disponueshem!",
+                 font=("Segoe UI", 11, "bold"), bg="#0d0f14", fg="#66FFCC").pack(pady=(22, 4))
+        tk.Label(win, text=f"Versioni aktual: {current_version}   ->   {latest_version}",
+                 font=("Segoe UI", 9), bg="#0d0f14", fg="#888").pack()
         tk.Label(win, text="Deshiron ta instalosh tani?",
-                 font=("Segoe UI", 9), bg="#0f1117", fg="#ccc").pack(pady=(8, 16))
+                 font=("Segoe UI", 9), bg="#0d0f14", fg="#ccc").pack(pady=(8, 16))
 
-        btn_row = tk.Frame(win, bg="#0f1117")
+        btn_row = tk.Frame(win, bg="#0d0f14")
         btn_row.pack()
 
         def do_update():
             try:
-                url = f"{GITHUB_RAW}/app.py"
-                dest = Path(sys.executable).parent / "app.py"
-                # Nese eshte frozen (PyInstaller), shiko ne _MEIPASS ose pranë exe
-                if getattr(sys, 'frozen', False):
-                    dest = Path(sys.executable).parent / "app.py"
-                urllib.request.urlretrieve(url, dest)
+                import urllib.request
+                urllib.request.urlretrieve(f"{GITHUB_RAW}/app.py", str(_EXTERNAL_APP))
+                _VER_FILE.write_text(latest_version)
                 win.destroy()
-                # Rihap programin
-                import subprocess
+                import subprocess, os
                 subprocess.Popen([sys.executable] + sys.argv)
-                import os; os._exit(0)
+                os._exit(0)
             except Exception as e:
                 tk.messagebox.showerror("Gabim", f"Update deshtoi:\n{e}", parent=win)
 
         tk.Button(btn_row, text="  Po, instalo  ", font=("Segoe UI", 9, "bold"),
-                  bg="#66FFCC", fg="#0f1117", relief="flat", padx=16, pady=8,
+                  bg="#66FFCC", fg="#0d0f14", relief="flat", padx=16, pady=8,
                   cursor="hand2", command=do_update).pack(side="left", padx=(0, 10))
         tk.Button(btn_row, text="Jo tani", font=("Segoe UI", 9),
-                  bg="#1a1d26", fg="#888", relief="flat", padx=16, pady=8,
+                  bg="#181b23", fg="#888", relief="flat", padx=16, pady=8,
                   cursor="hand2", command=win.destroy).pack(side="left")
 
-    # Thirre ne thread kryesor pas 1 sekonde (sigurohu qe App() eshte gati)
     try:
         tk._default_root.after(1000, _show)
     except Exception:
         pass
 
-def load_config():
     if CONFIG_FILE.exists():
         try:
             return json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
@@ -149,28 +164,78 @@ def paths():
         d.mkdir(parents=True, exist_ok=True)
     return base, biz, lg
 
-# ── COLORS — Night Mode Neutral ───────────────────────────────────────────────
-BG      = "#0d0f14"
-SURFACE = "#13151c"
-CARD    = "#181b23"
-BORDER  = "#252830"
-ACCENT  = "#66FFCC"
-GREEN   = "#22c55e"
-YELLOW  = "#eab308"
-RED     = "#ef4444"
-TEXT    = "#e8eaf0"
-MUTED   = "#4b5468"
-WHITE   = "#f1f5f9"
-H_BG    = "1a3a5c"
-ROW_ALT = "f0f4f8"
-INPUT_BG    = "#1e2130"
-INPUT_FG    = "#f1f5f9"
-INPUT_FOCUS = "#66FFCC"
+# ── THEME SYSTEM ─────────────────────────────────────────────────────────────
+THEMES = {
+    "dark": {
+        "BG":          "#1c1f2e",
+        "SURFACE":     "#242838",
+        "CARD":        "#2a2f42",
+        "CARD2":       "#323750",
+        "BORDER":      "#383d54",
+        "ACCENT":      "#4f8ef7",
+        "ACCENT2":     "#3b7df5",
+        "GREEN":       "#34c97e",
+        "YELLOW":      "#f5a623",
+        "RED":         "#f25f5c",
+        "TEXT":        "#eceef5",
+        "MUTED":       "#7b82a0",
+        "MUTED2":      "#555c78",
+        "WHITE":       "#ffffff",
+        "INPUT_BG":    "#1e2235",
+        "INPUT_FOCUS": "#4f8ef7",
+    },
+    "light": {
+        "BG":          "#f0f2f8",
+        "SURFACE":     "#ffffff",
+        "CARD":        "#ffffff",
+        "CARD2":       "#eef0f8",
+        "BORDER":      "#dde0ef",
+        "ACCENT":      "#3b7df5",
+        "ACCENT2":     "#2d6de8",
+        "GREEN":       "#1daa65",
+        "YELLOW":      "#e09400",
+        "RED":         "#e04e4b",
+        "TEXT":        "#1a1d2e",
+        "MUTED":       "#7b82a0",
+        "MUTED2":      "#adb5d0",
+        "WHITE":       "#ffffff",
+        "INPUT_BG":    "#f7f8fc",
+        "INPUT_FOCUS": "#3b7df5",
+    }
+}
 
-FONT   = ("Segoe UI", 13)
-FONT_B = ("Segoe UI", 13, "bold")
-FONT_S = ("Segoe UI", 11)
-FONT_H = ("Segoe UI", 14, "bold")
+_CURRENT_THEME = "dark"
+
+def T(key):
+    return THEMES[_CURRENT_THEME][key]
+
+# Globals per backward compat — rikomputon me set_theme()
+BG = SURFACE = CARD = BORDER = ACCENT = GREEN = YELLOW = RED = ""
+TEXT = MUTED = WHITE = INPUT_BG = INPUT_FG = INPUT_FOCUS = ""
+H_BG = "1a3a5c"
+ROW_ALT = "f0f4f8"
+CARD2 = MUTED2 = ACCENT2 = ""
+
+def set_theme(name):
+    global _CURRENT_THEME
+    global BG, SURFACE, CARD, CARD2, BORDER, ACCENT, ACCENT2
+    global GREEN, YELLOW, RED, TEXT, MUTED, MUTED2, WHITE
+    global INPUT_BG, INPUT_FG, INPUT_FOCUS
+    _CURRENT_THEME = name
+    t = THEMES[name]
+    BG = t["BG"]; SURFACE = t["SURFACE"]; CARD = t["CARD"]; CARD2 = t["CARD2"]
+    BORDER = t["BORDER"]; ACCENT = t["ACCENT"]; ACCENT2 = t["ACCENT2"]
+    GREEN = t["GREEN"]; YELLOW = t["YELLOW"]; RED = t["RED"]
+    TEXT = t["TEXT"]; MUTED = t["MUTED"]; MUTED2 = t["MUTED2"]; WHITE = t["WHITE"]
+    INPUT_BG = t["INPUT_BG"]; INPUT_FG = t["TEXT"]; INPUT_FOCUS = t["INPUT_FOCUS"]
+
+set_theme("dark")  # default
+
+FONT   = ("Segoe UI", 11)
+FONT_B = ("Segoe UI", 11, "bold")
+FONT_S = ("Segoe UI", 10)
+FONT_H = ("Segoe UI", 13, "bold")
+FONT_XS = ("Segoe UI", 9)
 
 # ── LOGGING ───────────────────────────────────────────────────────────────────
 def log(msg):
@@ -603,82 +668,74 @@ def run_setup_if_needed():
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
+        # Ngarko temën nga config
+        cfg = load_config()
+        saved_theme = cfg.get("theme", "dark")
+        set_theme(saved_theme)
         self.title("NjoPerKrejt - SmartRegister")
         self.geometry("860x660")
         self.minsize(760, 580)
         self.configure(bg=BG)
         self._build()
-        self.refresh_stats()
 
     def _build(self):
-        # Header — lartësi dinamike 2 rreshta
-        hdr = tk.Frame(self, bg=SURFACE)
+        set_theme(_CURRENT_THEME)
+
+        # ── Header ────────────────────────────────────────────────────────────
+        hdr = tk.Frame(self, bg=SURFACE, height=52)
         hdr.pack(fill="x")
+        hdr.pack_propagate(False)
 
-        # ── E majta: 2 rreshta teksti ──────────────────────────────────────
-        left = tk.Frame(hdr, bg=SURFACE)
-        left.pack(side="left", padx=16, pady=10)
-        tk.Label(left, text="NjoPerKrejt",
-                 font=("Segoe UI", 13, "bold"), bg=SURFACE, fg=WHITE).pack(anchor="w")
-        tk.Label(left, text="SmartRegister Excel",
-                 font=("Segoe UI", 9), bg=SURFACE, fg="#66FFCC").pack(anchor="w")
+        # Emri i programit
+        tk.Label(hdr, text="  NjoPerKrejt",
+                 font=("Segoe UI", 12, "bold"), bg=SURFACE, fg=TEXT).pack(side="left", padx=(16,0))
 
-        # Logo djathtas (SVG me cairosvg)
-        try:
-            import base64 as _b64, io as _io
-            from PIL import Image as _Img, ImageTk as _ITk
-            _LOGO_PNG_B64 = "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"
-            _png_bytes = _b64.b64decode(_LOGO_PNG_B64)
-            _img = _Img.open(_io.BytesIO(_png_bytes)).convert("RGBA")
-            # Resize proporcionalisht — lartësia 38px (2 rreshta teksti)
-            _ow, _oh = _img.size
-            _nh = 15
-            _nw = int(_ow * _nh / _oh)
-            _img = _img.resize((_nw, _nh), _Img.LANCZOS)
-            self._logo_img = _ITk.PhotoImage(_img)
-            tk.Label(hdr, image=self._logo_img, bg=SURFACE).pack(side="right", padx=(0, 16))
-        except Exception:
-            tk.Label(hdr, text="noctilux.dev", font=("Segoe UI", 8, "bold"),
-                     bg=SURFACE, fg="#66FFCC").pack(side="right", padx=(0, 16))
+        # Butoni theme (djathtas)
+        self._theme_btn = tk.Button(
+            hdr,
+            text="☀  Light" if _CURRENT_THEME == "dark" else "☾  Dark",
+            font=FONT_XS, bg=CARD2, fg=MUTED, relief="flat",
+            cursor="hand2", padx=10, pady=3, bd=0,
+            activebackground=CARD2, activeforeground=ACCENT,
+            command=self._toggle_theme)
+        self._theme_btn.pack(side="right", padx=(0, 14))
 
-        # ── Qendra: emri biznesi me badge ──────────────────────────────────
+        # Butoni settings
+        tk.Button(hdr, text="⚙", font=("Segoe UI", 12),
+                  bg=SURFACE, fg=MUTED, relief="flat", cursor="hand2", bd=0,
+                  activebackground=SURFACE, activeforeground=TEXT,
+                  command=self.open_settings).pack(side="right", padx=(0, 4))
+
+        # Emri i biznesit (qendër)
         _biz_name = load_config().get("biznes_name", "")
         center = tk.Frame(hdr, bg=SURFACE)
         center.place(relx=0.5, rely=0.5, anchor="center")
-        # Badge background
-        badge = tk.Frame(center, bg="#1a3a2e", padx=12, pady=4)
-        badge.pack()
-        self.lbl_biznes = tk.Label(badge, text=_biz_name,
-                                   font=("Segoe UI", 11, "bold"), bg="#1a3a2e", fg="#66FFCC")
+        self.lbl_biznes = tk.Label(center, text=_biz_name,
+                                   font=("Segoe UI", 11, "bold"), bg=SURFACE, fg=ACCENT)
         self.lbl_biznes.pack()
 
-        # ── Path bar — folder aktual + ikona folder (jo tekst) ──────────────
-        pb = tk.Frame(self, bg="#0a0d14", pady=5)
+        # ── Path bar ──────────────────────────────────────────────────────────
+        pb = tk.Frame(self, bg=BG, pady=4)
         pb.pack(fill="x")
-        tk.Label(pb, text="Folder aktual:", font=("Segoe UI", 8),
-                 bg="#0a0d14", fg=MUTED).pack(side="left", padx=(16, 4))
+        tk.Label(pb, text="📁", font=("Segoe UI", 9),
+                 bg=BG, fg=MUTED2).pack(side="left", padx=(16, 3))
         self.lbl_path = tk.Label(pb, text=str(get_biz_dir()),
-                                  font=("Consolas", 8), bg="#0a0d14", fg=ACCENT)
+                                  font=("Consolas", 8), bg=BG, fg=MUTED)
         self.lbl_path.pack(side="left")
-        tk.Button(pb, text="📁", font=("Segoe UI", 11), bg="#0a0d14", fg=MUTED,
-                  relief="flat", cursor="hand2", bd=0,
-                  command=self.open_settings).pack(side="right", padx=(0, 12))
 
-        # Stats — vetëm BIZNESE + DERGESA
-        sf = tk.Frame(self, bg=CARD)
-        sf.pack(fill="x")
-        self.s_biz = self._stat(sf, "BIZNESE", "0", ACCENT)
-        self.s_der = self._stat(sf, "DERGESA", "0", GREEN)
+        # ── Separator ─────────────────────────────────────────────────────────
+        tk.Frame(self, bg=BORDER, height=1).pack(fill="x")
 
-        # Tabs
+        # ── Tabs ──────────────────────────────────────────────────────────────
         style = ttk.Style()
         style.theme_use("default")
-        style.configure("T.TNotebook",     background=BG,      borderwidth=0)
-        style.configure("T.TNotebook.Tab", background=SURFACE, foreground=MUTED,
-                        padding=[18, 8],   font=FONT_S,        borderwidth=0)
+        style.configure("T.TNotebook",     background=BG, borderwidth=0, tabmargins=[0,0,0,0])
+        style.configure("T.TNotebook.Tab", background=BG, foreground=MUTED,
+                        padding=[20, 9],   font=FONT_S,  borderwidth=0,
+                        relief="flat")
         style.map("T.TNotebook.Tab",
-                  background=[("selected", ACCENT)],
-                  foreground=[("selected", WHITE)])
+                  background=[("selected", BG)],
+                  foreground=[("selected", ACCENT)])
 
         nb = ttk.Notebook(self, style="T.TNotebook")
         nb.pack(fill="both", expand=True)
@@ -687,7 +744,7 @@ class App(tk.Tk):
         self.t_biz  = tk.Frame(nb, bg=BG)
         self.t_log  = tk.Frame(nb, bg=BG)
 
-        nb.add(self.t_form, text="  Shto Dergese  ")
+        nb.add(self.t_form, text="  Dërgese  ")
         nb.add(self.t_biz,  text="  Bizneset  ")
         nb.add(self.t_log,  text="  Historia  ")
         nb.bind("<<NotebookTabChanged>>", self._tab_change)
@@ -696,15 +753,20 @@ class App(tk.Tk):
         self._build_biz()
         self._build_log()
 
+    def _toggle_theme(self):
+        global _CURRENT_THEME
+        new = "light" if _CURRENT_THEME == "dark" else "dark"
+        cfg = load_config()
+        cfg["theme"] = new
+        save_config(cfg)
+        # Rinicio app me temen e re
+        self.destroy()
+        set_theme(new)
+        app = App()
+        app.mainloop()
+
     def _stat(self, parent, label, val, color):
-        f = tk.Frame(parent, bg=CARD, padx=22, pady=10)
-        f.pack(side="left", fill="x", expand=True)
-        tk.Label(f, text=label, font=("Segoe UI", 8),
-                 bg=CARD, fg=MUTED).pack(anchor="w")
-        lbl = tk.Label(f, text=val, font=("Segoe UI", 20, "bold"),
-                       bg=CARD, fg=color)
-        lbl.pack(anchor="w")
-        return lbl
+        pass  # stats bar u hoq
 
     def _get_biz_list(self):
         _, biz, _ = paths()
@@ -731,9 +793,9 @@ class App(tk.Tk):
 
     def _build_form(self):
         self._last_biznesi  = ""
-        self._current_cols  = []   # kolonat origjinale te biznesit aktual
-        self.ents           = {}   # { col_index_0based: Entry widget }
-        self._form_frame    = None # frame i fushatve — ridrejtohet me biz ndryshim
+        self._current_cols  = []
+        self.ents           = {}
+        self._form_frame    = None
 
         wrapper = tk.Frame(self.t_form, bg=BG)
         wrapper.pack(fill="both", expand=True)
@@ -754,61 +816,68 @@ class App(tk.Tk):
             lambda e: self._canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
 
         outer = tk.Frame(self._inner, bg=BG)
-        outer.pack(fill="both", expand=True, padx=28, pady=18)
+        outer.pack(fill="both", expand=True, padx=20, pady=14)
         self._outer = outer
 
-        tk.Label(outer, text="DERGESE E RE", font=("Segoe UI", 8),
-                 bg=BG, fg=MUTED).pack(anchor="w", pady=(0, 8))
+        # ── Karta e kërkimit të biznesit ─────────────────────────────────────
+        search_card = tk.Frame(outer, bg=CARD,
+                               highlightbackground=BORDER, highlightthickness=1)
+        search_card.pack(fill="x", pady=(0, 8))
 
-        # ── Autocomplete Biznesi ─────────────────────────────────────────────
-        top_card = tk.Frame(outer, bg=CARD, padx=24, pady=14,
-                            highlightbackground=BORDER, highlightthickness=1)
-        top_card.pack(fill="x")
+        # Padding inner
+        sc_inner = tk.Frame(search_card, bg=CARD, padx=16, pady=10)
+        sc_inner.pack(fill="x")
 
-        biz_row = tk.Frame(top_card, bg=CARD)
+        tk.Label(sc_inner, text="BIZNESI", font=FONT_XS,
+                 bg=CARD, fg=MUTED2).pack(anchor="w", pady=(0, 4))
+
+        biz_row = tk.Frame(sc_inner, bg=CARD)
         biz_row.pack(fill="x")
-        tk.Label(biz_row, text="Biznesi  *", font=FONT_S, bg=CARD,
-                 fg=MUTED, width=28, anchor="w").pack(side="left")
 
         self._biz_var = tk.StringVar()
 
-        # Entry per autocomplete (jo Combobox)
-        self._biz_entry = tk.Entry(biz_row, textvariable=self._biz_var,
-                                    font=FONT, bg=SURFACE, fg=TEXT,
-                                    insertbackground=WHITE, relief="flat",
-                                    highlightbackground=ACCENT, highlightthickness=1)
-        self._biz_entry.pack(side="left", fill="x", expand=True, ipady=6)
+        # Entry e madhe për emrin e biznesit
+        self._biz_entry = tk.Entry(
+            biz_row, textvariable=self._biz_var,
+            font=("Segoe UI", 14, "bold"),
+            bg=INPUT_BG, fg=TEXT,
+            insertbackground=ACCENT,
+            relief="flat",
+            highlightbackground=BORDER, highlightthickness=2)
+        self._biz_entry.pack(side="left", fill="x", expand=True, ipady=7)
 
-        tk.Button(biz_row, text="+ I Ri", font=FONT_S,
+        tk.Button(biz_row, text="＋", font=("Segoe UI", 13),
                   bg=ACCENT, fg=WHITE, relief="flat", cursor="hand2",
-                  padx=8, pady=4,
-                  command=self._add_new_biz).pack(side="right", padx=(6, 0))
+                  padx=10, pady=4, bd=0,
+                  activebackground=ACCENT2, activeforeground=WHITE,
+                  command=self._add_new_biz).pack(side="right", padx=(8, 0))
 
         # Info label
-        self._lbl_cols = tk.Label(top_card,
-                                   text="Shkruaj emrin e biznesit ose zgjidh nga lista...",
-                                   font=("Segoe UI", 8), bg=CARD, fg=MUTED)
-        self._lbl_cols.pack(anchor="w", pady=(6, 0))
+        self._lbl_cols = tk.Label(sc_inner,
+                                   text="Shkruaj ose zgjidh biznesin...",
+                                   font=FONT_XS, bg=CARD, fg=MUTED2)
+        self._lbl_cols.pack(anchor="w", pady=(5, 0))
 
-        # ── Listbox sugjerime — vendoset NEN fushen e biznesit ───────────────
-        # Krijohet si Toplevel per ta vendosur saktesisht nen entry
-        self._suggest_win  = None  # Toplevel window
-        self._suggest_list = None  # Listbox brenda Toplevel
+        # ── Suggest Toplevel ──────────────────────────────────────────────────
+        self._suggest_win  = None
+        self._suggest_list = None
 
-        # ── Zona dinamike e fushatve ──────────────────────────────────────────
+        # ── Fusha dinamike ────────────────────────────────────────────────────
         self._fields_area = tk.Frame(outer, bg=BG)
-        self._fields_area.pack(fill="x", pady=(10, 0))
+        self._fields_area.pack(fill="x")
 
         # Status
-        self.lbl_status = tk.Label(outer, text="", font=FONT_S, bg=BG, fg=GREEN)
-        self.lbl_status.pack(pady=(8, 0), anchor="w")
+        self.lbl_status = tk.Label(outer, text="", font=FONT_XS, bg=BG, fg=GREEN)
+        self.lbl_status.pack(pady=(6, 0), anchor="w")
 
-        # Bindings autocomplete
+        # Bindings
         self._biz_var.trace_add("write", self._on_biz_type)
         self._biz_entry.bind("<Down>",     self._suggest_down)
         self._biz_entry.bind("<Return>",   self._on_entry_enter)
         self._biz_entry.bind("<Escape>",   lambda e: self._hide_suggestions())
-        self._biz_entry.bind("<FocusOut>", lambda e: self.after(200, self._hide_suggestions))
+        self._biz_entry.bind("<FocusIn>",  lambda e: self._biz_entry.config(highlightbackground=ACCENT))
+        self._biz_entry.bind("<FocusOut>", lambda e: (self._biz_entry.config(highlightbackground=BORDER),
+                                                       self.after(200, self._hide_suggestions)))
 
     def _on_biz_type(self, *args):
         """Kur shkruhet ne entry — shfaq sugjerimet."""
@@ -841,17 +910,16 @@ class App(tk.Tk):
             self._suggest_win.overrideredirect(True)   # pa border/title
             self._suggest_win.attributes("-topmost", True)
 
-            # Border i jashtëm
-            outer_f = tk.Frame(self._suggest_win, bg=ACCENT)
+            outer_f = tk.Frame(self._suggest_win, bg=BORDER)
             outer_f.pack(fill="both", expand=True, padx=1, pady=1)
 
             self._suggest_list = tk.Listbox(
                 outer_f,
-                font=FONT,
+                font=("Segoe UI", 12),
                 bg=CARD, fg=TEXT,
                 selectbackground=ACCENT,
-                selectforeground=WHITE,
-                activestyle="dotbox",
+                selectforeground=WHITE if _CURRENT_THEME=="dark" else BG,
+                activestyle="none",
                 relief="flat", borderwidth=0,
                 highlightthickness=0,
                 cursor="hand2"
@@ -862,9 +930,11 @@ class App(tk.Tk):
             self._suggest_list.bind("<Escape>",          lambda e: self._hide_suggestions())
             self._suggest_list.bind("<Up>",              self._on_suggest_up)
             self._suggest_list.bind("<Down>",            self._on_suggest_nav_down)
-            # Klikimi jasht mbyll listen
+            # Klikimi jasht — kontrollo pas pak ms
             self._suggest_win.bind("<FocusOut>",
-                lambda e: self.after(150, self._check_focus_out))
+                lambda e: self.after(100, self._check_focus_out))
+            self._suggest_list.bind("<FocusOut>",
+                lambda e: self.after(100, self._check_focus_out))
 
         # Mbush listen
         self._suggest_list.delete(0, "end")
@@ -877,32 +947,40 @@ class App(tk.Tk):
         ey = self._biz_entry.winfo_rooty()
         ew = self._biz_entry.winfo_width()
         eh = self._biz_entry.winfo_height()
-        row_h = 28
-        h = len(matches) * row_h + 4
+        row_h = 32
+        h = min(len(matches), 7) * row_h + 4
         self._suggest_win.geometry(f"{ew}x{h}+{ex}+{ey + eh}")
         self._suggest_win.deiconify()
 
     def _check_focus_out(self):
-        """Mbyll listen vetem nese fokusi nuk eshte tek entry ose lista."""
+        """Mbyll listen vetem nese fokusi ka shkuar diku tjeter."""
         try:
             fw = self.focus_get()
-            if fw not in (self._biz_entry, self._suggest_list):
-                self._hide_suggestions()
-        except:
+            # Mos mbyll nese fokusi eshte ende te entry ose te listbox
+            if self._suggest_list and fw == self._suggest_list:
+                return
+            if fw == self._biz_entry:
+                return
             self._hide_suggestions()
+        except:
+            pass
 
     def _hide_suggestions(self):
         if self._suggest_win and self._suggest_win.winfo_exists():
             self._suggest_win.withdraw()
 
     def _suggest_down(self, event):
-        """Shigjeta ↓ nga entry — shko ne listbox pa fshire tekstin."""
-        if self._suggest_win and self._suggest_win.winfo_exists()                 and self._suggest_list.size() > 0:
+        """Shigjeta ↓ — shko ne listbox, MOS e fshi tekstin."""
+        if self._suggest_win and self._suggest_win.winfo_exists()                 and self._suggest_list and self._suggest_list.size() > 0:
+            # Siguro qe lista eshte e dukshme
+            self._suggest_win.deiconify()
+            self._suggest_win.lift()
             self._suggest_list.focus_set()
             self._suggest_list.selection_clear(0, "end")
             self._suggest_list.selection_set(0)
             self._suggest_list.activate(0)
-        return "break"   # parandalon cursor-in te zhduket
+            self._suggest_list.see(0)
+        return "break"
 
     def _on_suggest_nav_down(self, event):
         """Navigim ↓ brenda listboxes."""
@@ -1003,123 +1081,112 @@ class App(tk.Tk):
         self._draw_fields(biz_name, columns)
 
     def _draw_fields(self, biz_name, columns):
-        """Vizato fushat — thirret nga _regenerate dhe nga reload."""
-        # Pastro vetem fushat (jo header)
+        """Vizato fushat — Soft UI, fusha kompakte."""
         for w in self._fields_area.winfo_children():
             w.destroy()
         self.ents = {}
 
-        hidden_key  = f"_hidden_{biz_name}"
-        hidden_set  = getattr(self, hidden_key, set())
-        today       = datetime.now().strftime("%d/%m/%Y")
+        hidden_key = f"_hidden_{biz_name}"
+        hidden_set = getattr(self, hidden_key, set())
+        today      = datetime.now().strftime("%d/%m/%Y")
 
-        # ── Wrapper kryesor ──────────────────────────────────────────────────
+        # Karta kryesore
         form = tk.Frame(self._fields_area, bg=CARD,
                         highlightbackground=BORDER, highlightthickness=1)
-        form.pack(fill="x", padx=2, pady=2)
+        form.pack(fill="x", pady=(0, 4))
 
-        # ── Toolbar: "Reload fushat" ─────────────────────────────────────────
-        toolbar = tk.Frame(form, bg=CARD, padx=16, pady=8)
+        # Toolbar — reload button
+        toolbar = tk.Frame(form, bg=CARD, padx=14, pady=6)
         toolbar.pack(fill="x")
-
         hidden_count = len([i for i in range(len(columns)) if i in hidden_set])
-        if hidden_count > 0:
-            reload_text = f"↺  Rivendos të gjitha  ({hidden_count} të fshehura)"
-        else:
-            reload_text = "↺  Rivendos fushat"
-
+        reload_text  = (f"↺  Rivendos ({hidden_count} fshehura)"
+                        if hidden_count > 0 else "↺  Rivendos")
         self._reload_btn = tk.Button(
             toolbar, text=reload_text,
-            font=("Segoe UI", 10), bg=CARD, fg=MUTED,
-            relief="flat", cursor="hand2",
-            activebackground=CARD, activeforeground=WHITE,
+            font=FONT_XS, bg=CARD, fg=MUTED2, relief="flat",
+            cursor="hand2", bd=0,
+            activebackground=CARD, activeforeground=ACCENT,
             command=lambda: self._reload_fields(biz_name, columns))
         self._reload_btn.pack(side="right")
 
-        # ── Fushat — 1 kolonë ────────────────────────────────────────────────
-        fields_wrap = tk.Frame(form, bg=CARD, padx=16, pady=4)
+        # ── Fushat ───────────────────────────────────────────────────────────
+        fields_wrap = tk.Frame(form, bg=CARD, padx=14, pady=2)
         fields_wrap.pack(fill="x")
 
         for idx, col_title in enumerate(columns):
             if idx in hidden_set:
                 continue
 
-            row = tk.Frame(fields_wrap, bg=CARD, pady=6)
+            row = tk.Frame(fields_wrap, bg=CARD, pady=3)
             row.pack(fill="x")
 
-            # Label + X në të njëjtin rresht
+            # Label + X
             lbl_row = tk.Frame(row, bg=CARD)
             lbl_row.pack(fill="x")
-
-            tk.Label(lbl_row, text=col_title,
-                     font=("Segoe UI", 10), bg=CARD, fg=MUTED,
-                     anchor="w").pack(side="left")
+            tk.Label(lbl_row, text=col_title, font=FONT_XS,
+                     bg=CARD, fg=MUTED, anchor="w").pack(side="left")
 
             def make_hide(i=idx, r=row, bname=biz_name, cols=columns):
                 def hide():
                     getattr(self, f"_hidden_{bname}").add(i)
-                    if i in self.ents:
-                        del self.ents[i]
+                    if i in self.ents: del self.ents[i]
                     r.destroy()
                     self._rebind_entries()
-                    # Update reload button count
                     hc = len(getattr(self, f"_hidden_{bname}", set()))
-                    if hasattr(self, '_reload_btn') and self._reload_btn.winfo_exists():
+                    if hasattr(self,"_reload_btn") and self._reload_btn.winfo_exists():
                         self._reload_btn.config(
-                            text=f"↺  Rivendos të gjitha  ({hc} të fshehura)",
-                            fg=ACCENT)
+                            text=f"↺  Rivendos ({hc} fshehura)" if hc > 0 else "↺  Rivendos",
+                            fg=ACCENT if hc > 0 else MUTED2)
                 return hide
 
-            x_btn = tk.Button(lbl_row, text="✕",
-                              font=("Segoe UI", 9), bg=CARD,
-                              fg="#2a4a3e", relief="flat", cursor="hand2",
-                              activebackground=CARD, activeforeground=RED,
-                              bd=0, padx=4,
-                              command=make_hide())
-            x_btn.pack(side="right")
+            tk.Button(lbl_row, text="✕", font=FONT_XS, bg=CARD,
+                      fg=MUTED2, relief="flat", cursor="hand2", bd=0,
+                      activebackground=CARD, activeforeground=RED,
+                      command=make_hide()).pack(side="right")
 
-            # Entry — i madh, i qartë
+            # Entry kompakte
             e = tk.Entry(row,
-                         font=("Segoe UI", 13),
-                         bg=INPUT_BG, fg=INPUT_FG,
+                         font=FONT,
+                         bg=INPUT_BG, fg=TEXT,
                          insertbackground=ACCENT,
                          relief="flat",
                          highlightbackground=BORDER,
-                         highlightthickness=2)
-            e.pack(fill="x", ipady=10)
-
-            # Focus: border bëhet teal
+                         highlightthickness=1)
+            e.pack(fill="x", ipady=5)
             e.bind("<FocusIn>",  lambda ev, w=e: w.config(highlightbackground=ACCENT))
             e.bind("<FocusOut>", lambda ev, w=e: w.config(highlightbackground=BORDER))
 
             col_lower = col_title.lower()
-            if any(x in col_lower for x in ["data", "date", "dt", "dita"]):
+            if any(x in col_lower for x in ["data","date","dt","dita"]):
                 e.insert(0, today)
 
             self.ents[idx] = {"entry": e, "col_title": col_title}
 
         self._rebind_entries()
 
-        # ── Separator ────────────────────────────────────────────────────────
-        tk.Frame(form, bg=BORDER, height=1).pack(fill="x", padx=16, pady=(8, 0))
+        # Separator
+        tk.Frame(form, bg=BORDER, height=1).pack(fill="x", padx=14, pady=(6,0))
 
-        # ── Butonat ──────────────────────────────────────────────────────────
-        btn_row = tk.Frame(form, bg=CARD, padx=16, pady=12)
+        # Butonat
+        btn_row = tk.Frame(form, bg=CARD, padx=14, pady=10)
         btn_row.pack(fill="x")
 
         self._btn_save = tk.Button(
-            btn_row, text="  RUAJ DËRGESEN  ",
-            font=("Segoe UI", 13, "bold"),
-            bg=ACCENT, fg="#0d0f14",
-            relief="flat", pady=13,
-            cursor="hand2", command=self.save)
-        self._btn_save.pack(side="left", fill="x", expand=True, padx=(0, 8))
+            btn_row, text="  RUAJ  ",
+            font=FONT_B, bg=ACCENT,
+            fg=BG if _CURRENT_THEME=="light" else "#0d0f14",
+            relief="flat", pady=9, cursor="hand2",
+            activebackground=ACCENT2,
+            activeforeground=WHITE,
+            command=self.save)
+        self._btn_save.pack(side="left", fill="x", expand=True, padx=(0,8))
         self._btn_save.bind("<Return>", lambda e: self.save())
 
         tk.Button(btn_row, text="Pastro",
-                  font=FONT_S, bg=SURFACE, fg=MUTED,
-                  relief="flat", pady=13, cursor="hand2",
-                  command=self.clear_form).pack(side="right", ipadx=16)
+                  font=FONT_S, bg=CARD2, fg=MUTED,
+                  relief="flat", pady=9, cursor="hand2",
+                  activebackground=CARD2, activeforeground=TEXT,
+                  command=self.clear_form).pack(side="right", ipadx=14)
 
         self._canvas.yview_moveto(0)
 
@@ -1188,16 +1255,16 @@ class App(tk.Tk):
         win.bind("<Return>", lambda ev: confirm())
 
     def _on_last_field_enter(self):
-        """Enter ne fushen e fundit — here e pare highlight butonin, here e dyte ruaj."""
+        """Enter ne fushen e fundit — here e pare highlight, here e dyte ruaj."""
         self._enter_count += 1
         if self._enter_count == 1:
-            # Enter i pare — ndrysho ngjyren e butonit si sinjal vizual
-            self._btn_save.config(bg="#16a34a")  # me i ndrite
-            self._btn_save.focus_set()
+            if hasattr(self, "_btn_save") and self._btn_save.winfo_exists():
+                self._btn_save.config(bg=ACCENT2)
+                self._btn_save.focus_set()
         else:
-            # Enter i dyte — ruaj
             self._enter_count = 0
-            self._btn_save.config(bg=GREEN)
+            if hasattr(self, "_btn_save") and self._btn_save.winfo_exists():
+                self._btn_save.config(bg=ACCENT)
             self.save()
 
     def _refresh_biz_dropdown(self):
@@ -1309,31 +1376,31 @@ class App(tk.Tk):
         if self._last_biznesi:
             self._biz_var.set(self._last_biznesi)
         self._enter_count = 0
-        if hasattr(self, "_btn_save"):
-            self._btn_save.config(bg=GREEN)
-        # Fokusi ne fushen e pare
+        if hasattr(self, "_btn_save") and self._btn_save.winfo_exists():
+            self._btn_save.config(bg=ACCENT)
         if self.ents:
-            self.ents[0]["entry"].focus_set()
+            list(self.ents.values())[0]["entry"].focus_set()
 
     # ── BIZNESET ──────────────────────────────────────────────────────────────
     def _build_biz(self):
-        top = tk.Frame(self.t_biz, bg=BG)
-        top.pack(fill="x", padx=24, pady=(18, 8))
-        tk.Label(top, text="BIZNESET E REGJISTRUARA", font=("Segoe UI", 8),
-                 bg=BG, fg=MUTED).pack(side="left")
-        tk.Button(top, text="Rifresko", font=FONT_S, bg=SURFACE, fg=MUTED,
-                  relief="flat", cursor="hand2",
+        top = tk.Frame(self.t_biz, bg=BG, pady=10)
+        top.pack(fill="x", padx=16)
+        tk.Button(top, text="⟳  Rifresko", font=FONT_XS, bg=CARD2, fg=MUTED,
+                  relief="flat", cursor="hand2", padx=8, pady=4, bd=0,
+                  activebackground=CARD2, activeforeground=TEXT,
                   command=self.refresh_biz).pack(side="right")
-        tk.Button(top, text="Hap Dosjen", font=FONT_S, bg=SURFACE, fg=ACCENT,
-                  relief="flat", cursor="hand2",
-                  command=self._open_biz_folder).pack(side="right", padx=6)
+        tk.Button(top, text="📁  Hap Dosjen", font=FONT_XS, bg=CARD2, fg=ACCENT,
+                  relief="flat", cursor="hand2", padx=8, pady=4, bd=0,
+                  activebackground=CARD2, activeforeground=ACCENT,
+                  command=self._open_biz_folder).pack(side="right", padx=(0,6))
 
         style = ttk.Style()
         style.configure("B.Treeview", background=CARD, foreground=TEXT,
-                        fieldbackground=CARD, font=FONT, rowheight=30, borderwidth=0)
+                        fieldbackground=CARD, font=FONT, rowheight=28, borderwidth=0)
         style.configure("B.Treeview.Heading", background=SURFACE,
-                        foreground=MUTED, font=FONT_S, relief="flat")
-        style.map("B.Treeview", background=[("selected", ACCENT)])
+                        foreground=MUTED, font=FONT_XS, relief="flat")
+        style.map("B.Treeview", background=[("selected", ACCENT)],
+                  foreground=[("selected", WHITE)])
 
         fr = tk.Frame(self.t_biz, bg=BG)
         fr.pack(fill="both", expand=True, padx=24, pady=(0, 20))
@@ -1563,12 +1630,7 @@ class App(tk.Tk):
 
     # ── HELPERS ───────────────────────────────────────────────────────────────
     def refresh_stats(self):
-        try:
-            s = get_stats()
-            self.s_biz.config(text=str(s["biznese"]))
-            self.s_der.config(text=str(s["dergesa"]))
-        except:
-            pass
+        pass  # stats bar u hoq
 
     def _tab_change(self, event):
         tab = event.widget.tab("current", "text").strip()
@@ -1633,6 +1695,7 @@ def run_biznes_name_if_needed():
 
 
 if __name__ == "__main__":
+    _boot_external()
     run_setup_if_needed()
     run_biznes_name_if_needed()
     check_for_update()
