@@ -19,7 +19,7 @@ APP_DIR     = Path(os.path.expanduser("~")) / "NjoPerKrejt"
 APP_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = APP_DIR / "config.json"
 
-VERSION       = "1.4"
+VERSION       = "1.5"
 GITHUB_USER   = "riadspahiu"
 GITHUB_REPO   = "njoperkrejt-app"
 GITHUB_BRANCH = "main"
@@ -29,23 +29,45 @@ _VER_FILE     = APP_DIR / "installed_version.txt"
 
 
 def _boot_external():
-    """Nese ka app_update.py te shkarkuar, ekzekutoje ate."""
+    """Nese ka app_update.py te shkarkuar, ekzekutoje ate.
+    Nese jemi duke u ekzekutuar SI app_update.py, mos bjer ne loop."""
+    # Mos ekzekuto veten — parandalon loop te pafund
+    current_file = Path(os.path.abspath(sys.argv[0]))
+    if current_file.resolve() == _EXTERNAL_APP.resolve():
+        return  # jemi tashme app_update.py, vazhdo normalisht
+
     if _EXTERNAL_APP.exists():
         try:
+            # Verifiko qe file-i eshte i vlefshëm (jo bosh/korrupt)
+            content = _EXTERNAL_APP.read_text(encoding="utf-8", errors="ignore")
+            if len(content) < 100 or "def " not in content:
+                _EXTERNAL_APP.unlink()  # fshi file-in e korruptuar
+                return
             import subprocess
             subprocess.Popen([sys.executable, str(_EXTERNAL_APP)] + sys.argv[1:])
             sys.exit(0)
         except Exception:
-            pass
+            # Nese deshtoi, fshi app_update.py dhe vazhdo me app.py origjinal
+            try:
+                _EXTERNAL_APP.unlink()
+            except Exception:
+                pass
 
 
 def _get_current_version():
-    """Kthe versionin aktual."""
+    """Kthe versionin aktual — pershpejton nese installed_version.txt ekziston."""
     if _VER_FILE.exists():
         try:
-            return _VER_FILE.read_text().strip()
+            v = _VER_FILE.read_text().strip()
+            if v:
+                return v
         except Exception:
             pass
+    # Shkruaj versionin aktual ne file ne here te pare
+    try:
+        _VER_FILE.write_text(VERSION)
+    except Exception:
+        pass
     return VERSION
 
 
@@ -59,8 +81,15 @@ def check_for_update():
             import urllib.request
             with urllib.request.urlopen(f"{GITHUB_RAW}/version.txt", timeout=5) as r:
                 latest = r.read().decode().strip()
-            if latest and latest != current:
-                _prompt_update(latest, current)
+            # Verifiko qe eshte version i vlefshëm, jo faqe HTML gabimi
+            if not latest or len(latest) > 20:
+                return
+            if latest == current:
+                return
+            # Mos shfaq nese ky version eshte refuzuar me pare
+            if latest == load_config().get("update_skipped_version", ""):
+                return
+            _prompt_update(latest, current)
         except Exception:
             pass
 
@@ -94,20 +123,24 @@ def _prompt_update(latest_version, current_version):
                 import urllib.request
                 # Shkarko app-in e ri
                 urllib.request.urlretrieve(f"{GITHUB_RAW}/app.py", str(_EXTERNAL_APP))
-                # Ruaj versionin e ri
+                # KRITIKAL: shkruaj version PARA se te rinisesh
+                # Keshtu app_update.py do te lexoje versionin e ri dhe nuk do te shfaqe popup
                 _VER_FILE.write_text(latest_version)
                 win.destroy()
-                # Rinis direkt me app_update.py (jo app.py origjinal)
+                # Rinis me app_update.py
                 import subprocess
                 subprocess.Popen([sys.executable, str(_EXTERNAL_APP)] + sys.argv[1:])
                 os._exit(0)
             except Exception as e:
-                tk.messagebox.showerror("Gabim", f"Update deshtoi:\n{e}", parent=win)
+                import traceback
+                tk.messagebox.showerror("Gabim", f"Update deshtoi:\n{e}\n\n{traceback.format_exc()}", parent=win)
 
         def skip_update():
-            # Ruaj versionin e ri si "i parë" — mos shfaq sërish derisa të dalë version akoma me i ri
+            """Ruaj versionin si 'i skipped' — mos shfaq popup sërish per kete version."""
             try:
-                _VER_FILE.write_text(latest_version)
+                cfg = load_config()
+                cfg["update_skipped_version"] = latest_version
+                save_config(cfg)
             except Exception:
                 pass
             win.destroy()
@@ -702,6 +735,18 @@ class App(tk.Tk):
         # Emri i programit
         tk.Label(hdr, text="  NjoPerKrejt",
                  font=("Segoe UI", 12, "bold"), bg=SURFACE, fg=TEXT).pack(side="left", padx=(16,0))
+
+        # Logo — ngarkohet nga base64 e embed-uar
+        try:
+            import base64 as _b64, io as _io
+            from PIL import Image as _Img, ImageTk as _ITk
+            _LOGO_B64 = "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"
+            _png = _b64.b64decode(_LOGO_B64)
+            _img = _Img.open(_io.BytesIO(_png)).convert("RGBA")
+            self._logo_img = _ITk.PhotoImage(_img)
+            tk.Label(hdr, image=self._logo_img, bg=SURFACE).pack(side="right", padx=(0, 14))
+        except Exception:
+            pass
 
         # Butoni theme (djathtas)
         self._theme_btn = tk.Button(
