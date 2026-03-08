@@ -20,8 +20,8 @@ APP_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = APP_DIR / "config.json"
 
 VERSION = "1.0"
-GITHUB_USER = "VENDOS_USERIN_KETU"   # <-- ndrysho me userin tuaj GitHub
-GITHUB_REPO = "VENDOS_REPON_KETU"    # <-- ndrysho me emrin e repos
+GITHUB_USER = "riadspahiu"
+GITHUB_REPO = "njoperkrejt-app"
 GITHUB_BRANCH = "main"
 GITHUB_RAW = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}"
 
@@ -350,25 +350,46 @@ def save_entry(entry):
     log(f"Dergese u ruajt: {b}  |  {entry.get('produkti','')}  |  EUR {entry.get('pagesa','')}")
     return bpath
 
+_FIN_KEYWORDS = ["fitim", "shpenzim", "total", "pagese", "pagesa", "vlera",
+                 "cmim", "çmim", "sasi", "shuma", "revenue", "profit",
+                 "expense", "amount", "price", "cost", "total", "euro", "eur"]
+
+def _is_financial_col(name: str) -> bool:
+    n = name.lower().replace("ë","e").replace("ç","c")
+    return any(k in n for k in _FIN_KEYWORDS)
+
 def get_stats():
     """Lexon statistikat direkt nga file-at e bizneseve."""
     _, biz_dir, _ = paths()
-    total_rows = 0
-    total_biz  = 0
+    total_rows   = 0
+    total_biz    = 0
+    fin_cols     = {}   # { col_name: total_value }
+
     for f in biz_dir.glob("*.xlsx"):
         if SYS_FOLDER in str(f):
             continue
         try:
             wb = openpyxl.load_workbook(f, read_only=True, data_only=True)
             ws = wb.active
-            rows = sum(1 for r in ws.iter_rows(min_row=2, values_only=True) if any(r))
+            headers = [str(c.value).strip() if c.value else "" for c in next(ws.iter_rows(min_row=1, max_row=1))]
+            fin_idx = {i: h for i, h in enumerate(headers) if h and _is_financial_col(h)}
+            rows = 0
+            for r in ws.iter_rows(min_row=2, values_only=True):
+                if any(r):
+                    rows += 1
+                    for i, col_name in fin_idx.items():
+                        try:
+                            val = float(r[i]) if r[i] is not None else 0
+                            fin_cols[col_name] = fin_cols.get(col_name, 0) + val
+                        except (TypeError, ValueError):
+                            pass
             if rows > 0:
                 total_rows += rows
                 total_biz  += 1
             wb.close()
         except:
             pass
-    return {"dergesa": total_rows, "biznese": total_biz, "pagesa": 0}
+    return {"dergesa": total_rows, "biznese": total_biz, "fin_cols": fin_cols}
 
 # ── COLUMN PREVIEW WINDOW ────────────────────────────────────────────────────
 def show_column_preview(folder_path):
@@ -622,13 +643,17 @@ class App(tk.Tk):
         self.refresh_stats()
 
     def _build(self):
-        # Header
-        hdr = tk.Frame(self, bg=SURFACE, height=58)
+        # Header — lartësi dinamike 2 rreshta
+        hdr = tk.Frame(self, bg=SURFACE)
         hdr.pack(fill="x")
-        hdr.pack_propagate(False)
-        # Majtas: "NjoPerKrejt — SmartRegister"
-        tk.Label(hdr, text="  NjoPerKrejt  \u2014  SmartRegister",
-                 font=FONT_H, bg=SURFACE, fg=WHITE).pack(side="left", padx=16, pady=14)
+
+        # ── E majta: 2 rreshta teksti ──────────────────────────────────────
+        left = tk.Frame(hdr, bg=SURFACE)
+        left.pack(side="left", padx=16, pady=10)
+        tk.Label(left, text="NjoPerKrejt",
+                 font=("Segoe UI", 13, "bold"), bg=SURFACE, fg=WHITE).pack(anchor="w")
+        tk.Label(left, text="SmartRegister Excel",
+                 font=("Segoe UI", 9), bg=SURFACE, fg="#66FFCC").pack(anchor="w")
 
         # Logo djathtas (SVG me cairosvg)
         try:
@@ -637,19 +662,29 @@ class App(tk.Tk):
             _LOGO_PNG_B64 = "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"
             _png_bytes = _b64.b64decode(_LOGO_PNG_B64)
             _img = _Img.open(_io.BytesIO(_png_bytes)).convert("RGBA")
+            # Resize proporcionalisht — lartësia 38px (2 rreshta teksti)
+            _ow, _oh = _img.size
+            _nh = 38
+            _nw = int(_ow * _nh / _oh)
+            _img = _img.resize((_nw, _nh), _Img.LANCZOS)
             self._logo_img = _ITk.PhotoImage(_img)
             tk.Label(hdr, image=self._logo_img, bg=SURFACE).pack(side="right", padx=(0, 16))
         except Exception:
             tk.Label(hdr, text="noctilux.dev", font=("Segoe UI", 8, "bold"),
                      bg=SURFACE, fg="#66FFCC").pack(side="right", padx=(0, 16))
 
-        # Qendra: emri i biznesit
+        # ── Qendra: emri biznesi me badge ──────────────────────────────────
         _biz_name = load_config().get("biznes_name", "")
-        self.lbl_biznes = tk.Label(hdr, text=_biz_name,
-                                   font=("Segoe UI", 12, "bold"), bg=SURFACE, fg="#66FFCC")
-        self.lbl_biznes.place(relx=0.5, rely=0.5, anchor="center")
+        center = tk.Frame(hdr, bg=SURFACE)
+        center.place(relx=0.5, rely=0.5, anchor="center")
+        # Badge background
+        badge = tk.Frame(center, bg="#1a3a2e", padx=12, pady=4)
+        badge.pack()
+        self.lbl_biznes = tk.Label(badge, text=_biz_name,
+                                   font=("Segoe UI", 11, "bold"), bg="#1a3a2e", fg="#66FFCC")
+        self.lbl_biznes.pack()
 
-        # Path bar — "Folder aktual" + "Nderro Folderin" ne te njejtin rresht
+        # ── Path bar — folder aktual + ikona folder (jo tekst) ──────────────
         pb = tk.Frame(self, bg="#0a0d14", pady=5)
         pb.pack(fill="x")
         tk.Label(pb, text="Folder aktual:", font=("Segoe UI", 8),
@@ -657,16 +692,18 @@ class App(tk.Tk):
         self.lbl_path = tk.Label(pb, text=str(get_biz_dir()),
                                   font=("Consolas", 8), bg="#0a0d14", fg=ACCENT)
         self.lbl_path.pack(side="left")
-        tk.Button(pb, text="Nderro Folderin", font=("Segoe UI", 8), bg="#0a0d14", fg=MUTED,
-                  relief="flat", cursor="hand2",
-                  command=self.open_settings).pack(side="right", padx=(0, 16))
+        tk.Button(pb, text="📁", font=("Segoe UI", 11), bg="#0a0d14", fg=MUTED,
+                  relief="flat", cursor="hand2", bd=0,
+                  command=self.open_settings).pack(side="right", padx=(0, 12))
 
-        # Stats
+        # Stats — BIZNESE + DERGESA gjithmonë; financiare vetëm nëse ka
         sf = tk.Frame(self, bg=CARD)
         sf.pack(fill="x")
-        self.s_biz = self._stat(sf, "BIZNESE", "0",     ACCENT)
-        self.s_der = self._stat(sf, "DERGESA", "0",     GREEN)
-        self.s_pag = self._stat(sf, "TOTALI",  "EUR 0", YELLOW)
+        self.s_biz = self._stat(sf, "BIZNESE", "0", ACCENT)
+        self.s_der = self._stat(sf, "DERGESA", "0", GREEN)
+        # Frame për kolonat financiare (shfaqet dinamikisht)
+        self.sf_fin = sf
+        self._fin_stat_frames = {}   # { col_name: label_widget }
 
         # Tabs
         style = ttk.Style()
@@ -1523,7 +1560,23 @@ class App(tk.Tk):
             s = get_stats()
             self.s_biz.config(text=str(s["biznese"]))
             self.s_der.config(text=str(s["dergesa"]))
-            self.s_pag.config(text=f"EUR {s['pagesa']:,.2f}")
+
+            fin = s.get("fin_cols", {})
+            # Largo kolonat që nuk janë më
+            for col in list(self._fin_stat_frames.keys()):
+                if col not in fin:
+                    self._fin_stat_frames[col].destroy()
+                    del self._fin_stat_frames[col]
+            # Shto / update kolonat e reja
+            colors = [YELLOW, "#f97316", "#a78bfa", "#fb7185", "#38bdf8"]
+            for i, (col, val) in enumerate(fin.items()):
+                color = colors[i % len(colors)]
+                formatted = f"{val:,.0f}"
+                if col in self._fin_stat_frames:
+                    self._fin_stat_frames[col].config(text=formatted)
+                else:
+                    lbl = self._stat(self.sf_fin, col.upper()[:12], formatted, color)
+                    self._fin_stat_frames[col] = lbl
         except:
             pass
 
