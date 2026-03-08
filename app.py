@@ -92,27 +92,40 @@ def _prompt_update(latest_version, current_version):
         def do_update():
             try:
                 import urllib.request
+                # Shkarko app-in e ri
                 urllib.request.urlretrieve(f"{GITHUB_RAW}/app.py", str(_EXTERNAL_APP))
+                # Ruaj versionin e ri
                 _VER_FILE.write_text(latest_version)
                 win.destroy()
-                import subprocess, os
-                subprocess.Popen([sys.executable] + sys.argv)
+                # Rinis direkt me app_update.py (jo app.py origjinal)
+                import subprocess
+                subprocess.Popen([sys.executable, str(_EXTERNAL_APP)] + sys.argv[1:])
                 os._exit(0)
             except Exception as e:
                 tk.messagebox.showerror("Gabim", f"Update deshtoi:\n{e}", parent=win)
+
+        def skip_update():
+            # Ruaj versionin e ri si "i parë" — mos shfaq sërish derisa të dalë version akoma me i ri
+            try:
+                _VER_FILE.write_text(latest_version)
+            except Exception:
+                pass
+            win.destroy()
 
         tk.Button(btn_row, text="  Po, instalo  ", font=("Segoe UI", 9, "bold"),
                   bg="#66FFCC", fg="#0d0f14", relief="flat", padx=16, pady=8,
                   cursor="hand2", command=do_update).pack(side="left", padx=(0, 10))
         tk.Button(btn_row, text="Jo tani", font=("Segoe UI", 9),
                   bg="#181b23", fg="#888", relief="flat", padx=16, pady=8,
-                  cursor="hand2", command=win.destroy).pack(side="left")
+                  cursor="hand2", command=skip_update).pack(side="left")
 
     try:
         tk._default_root.after(1000, _show)
     except Exception:
         pass
 
+
+def load_config():
     if CONFIG_FILE.exists():
         try:
             return json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
