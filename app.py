@@ -19,7 +19,7 @@ APP_DIR     = Path(os.path.expanduser("~")) / "NjoPerKrejt"
 APP_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = APP_DIR / "config.json"
 
-VERSION       = "1.0"
+VERSION       = "1.4"
 GITHUB_USER   = "riadspahiu"
 GITHUB_REPO   = "njoperkrejt-app"
 GITHUB_BRANCH = "main"
